@@ -1,83 +1,27 @@
-```yaml
-name: E-Commerce Microservice
+name: Test Workflow
 
 on:
+  workflow_dispatch:
   push:
-    tags:
-      - 'v*' # Triggers only when a version tag is pushed
+    branches:
+      - main
 
 jobs:
-  manufacture-artifact:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Download repository source code
-      - name: Fetch Source Code Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 2: Extract version metadata
-      - name: Extract Tag and Short Git Commit SHA
-        id: meta
+      - name: Create Test File
         run: |
-          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-          echo "clean_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "GitHub Actions is working!" > report.txt
+          echo "Build Time: $(date)" >> report.txt
+          cat report.txt
 
-      # Step 3: Setup Python
-      - name: Configure Python Runtime
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      # Step 4: Install project dependencies
-      - name: Install Application Dependencies
-        run: |
-          pip install -r requirements.txt
-
-      # Step 5: Execute unit tests
-      - name: Execute Automated Test Suite
-        run: |
-          pytest -v
-
-      # Step 6: Setup Docker build environment
-      - name: Initialize Docker Build Environment
-        uses: docker/setup-buildx-action@v3
-
-      # Step 7: Build Docker image
-      - name: Package Application Container
-        run: |
-          VERSION_STRING="${{ steps.meta.outputs.clean_tag }}-${{ steps.meta.outputs.sha_short }}"
-
-          docker build \
-            -t ecommerce-service:$VERSION_STRING \
-            .
-
-      # Step 8: Export image as tar archive
-      - name: Create Portable Container Archive
-        run: |
-          VERSION_STRING="${{ steps.meta.outputs.clean_tag }}-${{ steps.meta.outputs.sha_short }}"
-
-          docker save \
-            ecommerce-service:$VERSION_STRING \
-            -o ecommerce-service-$VERSION_STRING.tar
-
-      # Step 9: Upload archive as GitHub artifact
-      - name: Upload Container Package Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ecommerce-service-${{ steps.meta.outputs.clean_tag }}
-          path: ecommerce-service-*.tar
-          retention-days: 7
-
-      # Step 10: Generate release notes
-      - name: Generate Release Documentation
-        run: |
-          echo "# Release Notes" > release-notes.md
-          echo "" >> release-notes.md
-          git log --pretty=format:"- %s" -n 20 >> release-notes.md
-
-      # Step 11: Publish GitHub Release
-      - name: Create GitHub Release Entry
-        uses: softprops/action-gh-release@v2
-        with:
-          body_path: release-notes.md
-```
+          name: build-report
+          path: report.txt
