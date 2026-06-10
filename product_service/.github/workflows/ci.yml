@@ -12,7 +12,6 @@ env:
   IMAGE_NAME: ecommerce-service
 
 jobs:
-
   test:
     runs-on: ubuntu-latest
 
@@ -27,19 +26,20 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Health Check
+      - name: Run Unit Tests
         run: |
-          python -m py_compile app.py
+          pytest -v
 
   build-and-push:
     needs: test
-
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
       - name: Extract Version
         run: |
@@ -54,29 +54,33 @@ jobs:
       - name: Build Docker Image
         run: |
           docker build \
-          -t ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
-          -t ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+            -t ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
+            -t ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
 
-      - name: Push Version Image
+      - name: Push Version Tag
         run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
 
-      - name: Push SHA Image
+      - name: Push Commit SHA Tag
         run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
   release:
     needs: build-and-push
-
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Generate Changelog
+      - name: Generate Release Notes
         run: |
           echo "# Release Notes" > release-notes.md
-          git log --pretty=format:"- %s" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "## Changes" >> release-notes.md
+          git log --pretty=format:"- %s" -n 20 >> release-notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
