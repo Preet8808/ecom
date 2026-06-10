@@ -1,7 +1,9 @@
+```yaml
 name: Test Workflow
 
 on:
   workflow_dispatch:
+
   push:
     branches:
       - main
@@ -14,14 +16,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Read Version
+        id: version
+        run: |
+          echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
+
       - name: Create Test File
         run: |
           echo "GitHub Actions is working!" > report.txt
+          echo "Version: $VERSION" >> report.txt
+          echo "Commit: ${{ github.sha }}" >> report.txt
           echo "Build Time: $(date)" >> report.txt
           cat report.txt
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-report
+          name: build-report-v${{ env.VERSION }}
           path: report.txt
+```
