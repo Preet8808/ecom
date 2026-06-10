@@ -14,5 +14,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Test
-        run: echo "GitHub Actions is working!"
+      - name: Create Test File
+        run: |
+          echo "GitHub Actions is working!" > report.txt
+          echo "Build Time: $(date)" >> report.txt
+          cat report.txt
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report
+          path: report.txt
