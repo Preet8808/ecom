@@ -1,27 +1,87 @@
-name: Test Workflow
+```yaml
+name: Ecommerce CI Pipeline
 
 on:
   workflow_dispatch:
+
   push:
     branches:
       - main
+
+    tags:
+      - "v*.*.*"
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create Test File
-        run: |
-          echo "GitHub Actions is working!" > report.txt
-          echo "Build Time: $(date)" >> report.txt
-          cat report.txt
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Upload Artifact
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Tests
+        run: |
+          pytest -v > test-report.txt
+
+      - name: Upload Test Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: test-report.txt
+
+  build:
+    needs: test
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t ecommerce-service:${{ github.sha }} .
+
+      - name: Save Docker Image Info
+        run: |
+          echo "Docker Image Built Successfully" > build-report.txt
+          echo "Image Tag: ${{ github.sha }}" >> build-report.txt
+
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-report
-          path: report.txt
+          path: build-report.txt
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Release Notes
+        run: |
+          echo "# Release Notes" > release-notes.md
+          git log --pretty=format:"- %s" -n 20 >> release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+```
