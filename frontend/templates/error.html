@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .error-page { max-width: 500px; margin: 80px auto; text-align: center; }
+    .error-page p:first-child { font-size: 80px; margin-bottom: 20px; }
+    .error-page h1 { font-size: 28px; color: #1a237e; margin-bottom: 12px; }
+    .error-page p { color: #666; margin-bottom: 24px; }
+    .error-page a { display: inline-block; padding: 12px 28px; background: #1a237e; color: white; border-radius: 6px; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <p>&#128679;</p>
+    <h1>Oops!</h1>
+    <p>{{ message | default('Something went wrong.') }}</p>
+    <a href="/">Go Home</a>
+</div>
+{% endblock %}

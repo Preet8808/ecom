@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: ecomops
+  labels:
+    app: product-service
+    app.kubernetes.io/name: product-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: ecomops-platform
+spec:
+  type: ClusterIP
+  selector:
+    app: product-service
+  ports:
+    - port: 5000
+      targetPort: 5000
+      name: http
+      protocol: TCP
+  sessionAffinity: None

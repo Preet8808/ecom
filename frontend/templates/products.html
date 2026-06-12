@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+    .page-header { margin-bottom: 30px; }
+    .page-header h1 { font-size: 28px; color: #1a237e; margin-bottom: 8px; }
+    .page-header p { color: #888; }
+    
+    .filter-bar { display: flex; gap: 16px; margin-bottom: 30px; flex-wrap: wrap; align-items: center; background: white; padding: 16px 20px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .filter-bar select, .filter-bar input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px; outline: none; }
+    .filter-bar label { font-size: 13px; color: #666; font-weight: 500; }
+    .filter-btn { padding: 8px 20px; background: #1a237e; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 13px; }
+    .filter-btn:hover { background: #283593; }
+    .filter-btn.secondary { background: #f5f5f5; color: #333; }
+    
+    .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
+    .product-card { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: all 0.2s; border: 1px solid #e8eaf6; }
+    .product-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.1); transform: translateY(-4px); }
+    .product-img { height: 200px; background: linear-gradient(135deg, #e8eaf6, #c5cae9); display: flex; align-items: center; justify-content: center; font-size: 60px; }
+    .product-info { padding: 16px; }
+    .product-name { font-size: 15px; font-weight: 600; color: #1a237e; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .product-brand { font-size: 12px; color: #888; margin-bottom: 8px; }
+    .product-bottom { display: flex; align-items: center; justify-content: space-between; }
+    .product-price { font-size: 20px; font-weight: 700; color: #1a237e; }
+    .add-btn { padding: 8px 16px; background: #1a237e; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 13px; }
+    .add-btn:hover { background: #283593; }
+    .add-btn.added { background: #4caf50; }
+    
+    .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 40px; }
+    .pagination a, .pagination span { padding: 10px 16px; border-radius: 5px; font-size: 14px; }
+    .pagination a { background: white; color: #1a237e; border: 1px solid #e0e0e0; }
+    .pagination a:hover { background: #1a237e; color: white; }
+    .pagination .current { background: #1a237e; color: white; font-weight: 600; }
+    
+    .sidebar { display: grid; grid-template-columns: 220px 1fr; gap: 30px; }
+    .category-list { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); height: fit-content; }
+    .category-list h3 { font-size: 16px; margin-bottom: 12px; color: #1a237e; }
+    .category-list a { display: block; padding: 8px 0; color: #555; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+    .category-list a:hover, .category-list a.active { color: #1a237e; font-weight: 600; }
+    .category-list .count { color: #aaa; font-size: 12px; }
+    
+    .no-results { text-align: center; padding: 60px; color: #888; }
+    .no-results p:first-child { font-size: 48px; margin-bottom: 16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>All Products</h1>
+    {% if selected_category %}
+    <p>Showing products in: <strong>{{ selected_category }}</strong></p>
+    {% elif search_query %}
+    <p>Search results for: <strong>"{{ search_query }}"</strong></p>
+    {% else %}
+    <p>Browse our complete product catalog</p>
+    {% endif %}
+</div>
+
+<!-- Filters -->
+<form class="filter-bar" method="GET" action="/products" id="filter-form">
+    <input type="hidden" name="search" value="{{ search_query }}">
+    <input type="hidden" name="category" value="{{ selected_category }}">
+    <label>Sort by:</label>
+    <select name="sort_by" onchange="this.form.submit()">
+        <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>Newest</option>
+        <option value="price" {% if sort_by == 'price' %}selected{% endif %}>Price</option>
+        <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
+        <option value="rating" {% if sort_by == 'rating' %}selected{% endif %}>Rating</option>
+    </select>
+    <select name="sort_order" onchange="this.form.submit()">
+        <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Descending</option>
+        <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Ascending</option>
+    </select>
+    <label>Price:</label>
+    <input type="number" name="min_price" placeholder="Min $" value="{{ min_price }}" style="width: 80px;">
+    <input type="number" name="max_price" placeholder="Max $" value="{{ max_price }}" style="width: 80px;">
+    <button type="submit" class="filter-btn">Apply</button>
+    <a href="/products" class="filter-btn secondary">Clear</a>
+</form>
+
+<!-- Content -->
+<div class="sidebar">
+    <!-- Category Sidebar -->
+    <aside class="category-list">
+        <h3>Categories</h3>
+        <a href="/products" {% if not selected_category %}class="active"{% endif %}>All Categories</a>
+        {% for cat in categories %}
+        <a href="/products?category={{ cat.name }}" {% if selected_category == cat.name %}class="active"{% endif %}>
+            {{ cat.name }} <span class="count">({{ cat.product_count }})</span>
+        </a>
+        {% endfor %}
+    </aside>
+    
+    <!-- Products Grid -->
+    <div>
+        <div class="products-grid">
+            {% for product in products %}
+            <div class="product-card" data-id="{{ product.id }}" data-sku="{{ product.sku }}" data-name="{{ product.name }}" data-price="{{ product.price }}">
+                <a href="/product/{{ product.id }}">
+                    <div class="product-img">
+                        {% if product.category == 'Electronics' %}&#128241;{% elif product.category == 'Fashion' %}&#128087;{% elif product.category == 'Home' %}&#127969;{% elif product.category == 'Sports' %}&#9917;{% elif product.category == 'Books' %}&#128218;{% else %}&#128230;{% endif %}
+                    </div>
+                </a>
+                <div class="product-info">
+                    <a href="/product/{{ product.id }}"><div class="product-name">{{ product.name }}</div></a>
+                    <div class="product-brand">{{ product.brand or product.category }}</div>
+                    <div class="product-bottom">
+                        <span class="product-price">${{ "%.2f"|format(product.price) }}</span>
+                        <button class="add-btn" onclick="addToCart(this)">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if not products %}
+        <div class="no-results">
+            <p>&#128270;</p>
+            <h3>No products found</h3>
+            <p>Try adjusting your search or filters</p>
+        </div>
+        {% endif %}
+        
+        <!-- Pagination -->
+        {% if pagination.total_pages > 1 %}
+        <div class="pagination">
+            {% if pagination.page > 1 %}
+            <a href="?page={{ pagination.page - 1 }}&category={{ selected_category }}&search={{ search_query }}&sort_by={{ sort_by }}&sort_order={{ sort_order }}">&larr; Prev</a>
+            {% endif %}
+            {% for p in range(1, pagination.total_pages + 1) %}
+                {% if p == pagination.page %}
+                <span class="current">{{ p }}</span>
+                {% else %}
+                <a href="?page={{ p }}&category={{ selected_category }}&search={{ search_query }}&sort_by={{ sort_by }}&sort_order={{ sort_order }}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+            {% if pagination.page < pagination.total_pages %}
+            <a href="?page={{ pagination.page + 1 }}&category={{ selected_category }}&search={{ search_query }}&sort_by={{ sort_by }}&sort_order={{ sort_order }}">Next &rarr;</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

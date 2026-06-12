@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title | default('EcomOps') }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; line-height: 1.6; }
+        a { text-decoration: none; color: inherit; }
+        
+        /* Header */
+        .header { background: linear-gradient(135deg, #1a237e 0%, #283593 100%); color: white; padding: 0; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 40px; }
+        .logo { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+        .logo span { color: #ffd700; }
+        .search-bar { flex: 1; max-width: 500px; margin: 0 30px; display: flex; }
+        .search-bar input { flex: 1; padding: 10px 16px; border: none; border-radius: 4px 0 0 4px; font-size: 14px; outline: none; }
+        .search-bar button { padding: 10px 20px; background: #ffd700; color: #1a237e; border: none; border-radius: 0 4px 4px 0; cursor: pointer; font-weight: 600; }
+        .header-actions { display: flex; gap: 20px; align-items: center; }
+        .header-actions a { color: white; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+        .header-actions a:hover { color: #ffd700; }
+        .cart-icon { position: relative; }
+        .cart-badge { position: absolute; top: -8px; right: -10px; background: #ff5722; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; }
+        
+        /* Nav */
+        .nav-bar { background: #0d1642; padding: 0 40px; display: flex; gap: 0; }
+        .nav-bar a { padding: 12px 20px; color: #b0bec5; font-size: 14px; transition: all 0.2s; }
+        .nav-bar a:hover, .nav-bar a.active { color: white; background: rgba(255,255,255,0.05); }
+        
+        /* Main Content */
+        .container { max-width: 1400px; margin: 0 auto; padding: 30px 40px; min-height: 600px; }
+        
+        /* Footer */
+        .footer { background: #1a237e; color: #b0bec5; padding: 40px; margin-top: 60px; }
+        .footer-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px; max-width: 1400px; margin: 0 auto; }
+        .footer h4 { color: white; margin-bottom: 16px; font-size: 16px; }
+        .footer a { display: block; color: #90a4ae; margin: 8px 0; font-size: 14px; }
+        .footer a:hover { color: #ffd700; }
+        .footer-bottom { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 13px; }
+        
+        /* Flash Messages */
+        .flash-messages { margin-bottom: 20px; }
+        .flash { padding: 12px 20px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; }
+        .flash.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+        .flash.error { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+        .flash.info { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-top { padding: 12px 20px; flex-wrap: wrap; }
+            .search-bar { order: 3; margin: 10px 0 0 0; max-width: 100%; width: 100%; }
+            .nav-bar { padding: 0 20px; overflow-x: auto; }
+            .container { padding: 20px; }
+            .footer-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-top">
+            <a href="/" class="logo">Ecom<span>Ops</span></a>
+            <form class="search-bar" action="/products" method="GET">
+                <input type="text" name="search" placeholder="Search products..." value="{{ search_query | default('') }}">
+                <button type="submit">Search</button>
+            </form>
+            <div class="header-actions">
+                <a href="/cart" class="cart-icon">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    Cart <span class="cart-badge" id="cart-count">0</span>
+                </a>
+            </div>
+        </div>
+        <nav class="nav-bar">
+            <a href="/" {% if request.path == '/' %}class="active"{% endif %}>Home</a>
+            <a href="/products" {% if '/products' in request.path %}class="active"{% endif %}>All Products</a>
+            <a href="/products?category=Electronics">Electronics</a>
+            <a href="/products?category=Fashion">Fashion</a>
+            <a href="/products?category=Home">Home & Living</a>
+            <a href="/products?category=Sports">Sports</a>
+            <a href="/products?category=Books">Books</a>
+        </nav>
+    </header>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="container">
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-grid">
+            <div>
+                <h4>Shop</h4>
+                <a href="/products">All Products</a>
+                <a href="/products?category=Electronics">Electronics</a>
+                <a href="/products?category=Fashion">Fashion</a>
+                <a href="/products?category=Home">Home & Living</a>
+            </div>
+            <div>
+                <h4>Customer Service</h4>
+                <a href="#">Contact Us</a>
+                <a href="#">Shipping Info</a>
+                <a href="#">Returns & Exchanges</a>
+                <a href="#">FAQ</a>
+            </div>
+            <div>
+                <h4>Company</h4>
+                <a href="#">About Us</a>
+                <a href="#">Careers</a>
+                <a href="#">Press</a>
+                <a href="#">Blog</a>
+            </div>
+            <div>
+                <h4>Connect</h4>
+                <a href="#">Facebook</a>
+                <a href="#">Twitter</a>
+                <a href="#">Instagram</a>
+                <a href="#">LinkedIn</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            &copy; 2024 EcomOps. All rights reserved. | Built with Flask, MongoDB, Docker, Kubernetes, Prometheus & Grafana.
+        </div>
+    </footer>
+
+    <script>
+        // Global cart state stored in localStorage
+        const CART_STORAGE_KEY = 'ecomops_cart_id';
+        
+        function getCartId() {
+            return localStorage.getItem(CART_STORAGE_KEY);
+        }
+        
+        function setCartId(id) {
+            localStorage.setItem(CART_STORAGE_KEY, id);
+        }
+        
+        function updateCartCount() {
+            const cartId = getCartId();
+            if (!cartId) return;
+            
+            // Update the cart link to include cart_id
+            const cartLinks = document.querySelectorAll('.cart-icon');
+            cartLinks.forEach(link => {
+                link.href = `/cart?cart_id=${cartId}`;
+            });
+
+            fetch(`/api/cart/${cartId}/data`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (data && data.item_count !== undefined) {
+                        document.getElementById('cart-count').textContent = data.item_count;
+                    }
+                })
+                .catch(() => {});
+        }
+        
+        async function addToCart(btn) {
+            const card = btn.closest('.product-card');
+            const sku = card.dataset.sku;
+            const name = card.dataset.name;
+            const price = parseFloat(card.dataset.price);
+            
+            btn.textContent = 'Adding...';
+            btn.disabled = true;
+            
+            try {
+                // Create cart if needed
+                let cartId = getCartId();
+                if (!cartId) {
+                    const resp = await fetch('/api/cart/create', { method: 'POST' });
+                    const data = await resp.json();
+                    cartId = data.cart?.id;
+                    setCartId(cartId);
+                    // Update the cart link
+                    const cartLinks = document.querySelectorAll('.cart-icon');
+                    cartLinks.forEach(link => {
+                        link.href = `/cart?cart_id=${cartId}`;
+                    });
+                }
+                
+                // Add item
+                const resp = await fetch(`/api/cart/${cartId}/add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sku, name, price, quantity: 1 })
+                });
+                
+                const data = await resp.json();
+                
+                if (resp.ok) {
+                    btn.textContent = 'Added!';
+                    btn.classList.add('added');
+                    setTimeout(() => {
+                        btn.textContent = 'Add to Cart';
+                        btn.classList.remove('added');
+                        btn.disabled = false;
+                    }, 2000);
+                    document.getElementById('cart-count').textContent = data.cart?.item_count || 0;
+                } else {
+                    btn.textContent = 'Failed';
+                    setTimeout(() => { btn.textContent = 'Add to Cart'; btn.disabled = false; }, 2000);
+                }
+            } catch (e) {
+                btn.textContent = 'Error';
+                setTimeout(() => { btn.textContent = 'Add to Cart'; btn.disabled = false; }, 2000);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', updateCartCount);
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

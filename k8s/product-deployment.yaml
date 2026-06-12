@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: ecomops
+  labels:
+    app: product-service
+    app.kubernetes.io/name: product-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: ecomops-platform
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+        app.kubernetes.io/name: product-service
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: ecomops-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5000"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      containers:
+        - name: product-service
+          image: preet8808/product-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+              name: http
+              protocol: TCP
+          env:
+            - name: FLASK_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: ecomops-config
+                  key: FLASK_ENV
+            - name: FLASK_DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: ecomops-config
+                  key: FLASK_DEBUG
+            - name: MONGO_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ecomops-config
+                  key: MONGO_HOST
+            - name: MONGO_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ecomops-config
+                  key: MONGO_PORT
+            - name: MONGO_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ecomops-config
+                  key: MONGO_DB_NAME
+            - name: MONGO_AUTH_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: ecomops-config
+                  key: MONGO_AUTH_DB
+            - name: MONGO_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_USERNAME
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: MONGO_PASSWORD
+            - name: APP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ecomops-config
+                  key: APP_PORT
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      restartPolicy: Always
