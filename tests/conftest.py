@@ -6,7 +6,7 @@ from pathlib import Path
 
 def _register_service_package(package_name: str, service_dir: str) -> None:
     """Expose <package_name>.app from a hyphenated service directory."""
-    if package_name in sys.modules and f"{package_name}.app" in sys.modules:
+    if package_name in sys.modules or f"{package_name}.app" in sys.modules:
         return
 
     app_path = Path(__file__).resolve().parents[1] / service_dir / "app.py"
