@@ -22,7 +22,7 @@ def _register_service_package(package_name: str, service_dir: str) -> None:
     spec.loader.exec_module(module)
 
     package = types.ModuleType(package_name)
-    package.__path__ = []
+    package.__path__ = [str(app_path.parent)]
     package.app = module
     sys.modules[package_name] = package
 
