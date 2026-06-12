@@ -21,9 +21,10 @@ API Endpoints:
 from flask import Flask, jsonify, request
 from flask_pymongo import PyMongo
 from bson import ObjectId
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import requests
+from prometheus_flask_exporter import PrometheusMetrics
 
 # ---------------------------------------------------------------------------
 # Application Factory
@@ -37,7 +38,11 @@ def create_app(config_name="production"):
     
     mongo = PyMongo(app)
     app.mongo = mongo
-    app.start_time = datetime.utcnow()
+    app.start_time = datetime.now(timezone.utc)
+    
+    # Initialize Prometheus Metrics
+    metrics = PrometheusMetrics(app)
+    metrics.info('app_info', 'Shopping Cart Service', version='1.0.0')
     
     # Product service URL for price validation
     app.product_service_url = os.environ.get(
@@ -108,9 +113,9 @@ def serialize_cart(cart):
         "total": round(cart.get("total", 0.0), 2),
         "item_count": sum(item.get("quantity", 0) for item in cart.get("items", [])),
         "status": cart.get("status", "active"),
-        "created_at": cart.get("created_at", datetime.utcnow()).isoformat() if isinstance(cart.get("created_at"), datetime) else cart.get("created_at"),
-        "updated_at": cart.get("updated_at", datetime.utcnow()).isoformat() if isinstance(cart.get("updated_at"), datetime) else cart.get("updated_at"),
-        "expires_at": cart.get("expires_at", datetime.utcnow()).isoformat() if isinstance(cart.get("expires_at"), datetime) else cart.get("expires_at"),
+        "created_at": cart.get("created_at", datetime.now(timezone.utc)).isoformat() if isinstance(cart.get("created_at"), datetime) else cart.get("created_at"),
+        "updated_at": cart.get("updated_at", datetime.now(timezone.utc)).isoformat() if isinstance(cart.get("updated_at"), datetime) else cart.get("updated_at"),
+        "expires_at": cart.get("expires_at", datetime.now(timezone.utc)).isoformat() if isinstance(cart.get("expires_at"), datetime) else cart.get("expires_at"),
     }
 
 
@@ -179,21 +184,21 @@ def health_check():
     """Health check endpoint for Kubernetes probes."""
     try:
         mongo.db.command("ping")
-        uptime = (datetime.utcnow() - app.start_time).total_seconds()
+        uptime = (datetime.now(timezone.utc) - app.start_time).total_seconds()
         return jsonify({
             "status": "healthy",
             "service": "cart-service",
             "version": "1.0.0",
             "uptime_seconds": round(uptime, 2),
             "database": "connected",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }), 200
     except Exception as e:
         return jsonify({
             "status": "unhealthy",
             "service": "cart-service",
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }), 503
 
 
@@ -215,9 +220,9 @@ def create_cart():
             "tax": 0.0,
             "total": 0.0,
             "status": "active",
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
-            "expires_at": datetime.utcnow() + timedelta(hours=48),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=48),
         }
         
         result = mongo.db.carts.insert_one(cart_doc)
@@ -243,19 +248,13 @@ def get_cart(cart_id):
         if not cart:
             return jsonify({"error": "Cart not found"}), 404
         
-        # Recalculate totals to ensure accuracy
+        # Recalculate totals to ensure accuracy (on-the-fly, no DB write)
         totals = calculate_cart_totals(
             cart.get("items", []),
             cart.get("discount_code"),
             cart.get("shipping_method", "standard")
         )
         cart.update(totals)
-        
-        # Update cart with recalculated values
-        mongo.db.carts.update_one(
-            {"_id": ObjectId(cart_id)},
-            {"$set": {**totals, "updated_at": datetime.utcnow()}}
-        )
         
         return jsonify(serialize_cart(cart)), 200
     
@@ -307,10 +306,10 @@ def add_item(cart_id):
         if existing_item:
             # Update quantity
             existing_item["quantity"] += quantity
-            existing_item["updated_at"] = datetime.utcnow().isoformat()
+            existing_item["updated_at"] = datetime.now(timezone.utc).isoformat()
             mongo.db.carts.update_one(
                 {"_id": ObjectId(cart_id), "items.sku": sku},
-                {"$set": {"items.$": existing_item, "updated_at": datetime.utcnow()}}
+                {"$set": {"items.$": existing_item, "updated_at": datetime.now(timezone.utc)}}
             )
         else:
             # Add new item
@@ -319,12 +318,12 @@ def add_item(cart_id):
                 "name": item_name,
                 "price": float(item_price),
                 "quantity": quantity,
-                "added_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
+                "added_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }
             mongo.db.carts.update_one(
                 {"_id": ObjectId(cart_id)},
-                {"$push": {"items": new_item}, "$set": {"updated_at": datetime.utcnow()}}
+                {"$push": {"items": new_item}, "$set": {"updated_at": datetime.now(timezone.utc)}}
             )
         
         # Recalculate totals
@@ -336,7 +335,7 @@ def add_item(cart_id):
         )
         mongo.db.carts.update_one(
             {"_id": ObjectId(cart_id)},
-            {"$set": {**totals, "updated_at": datetime.utcnow()}}
+            {"$set": {**totals, "updated_at": datetime.now(timezone.utc)}}
         )
         updated_cart = mongo.db.carts.find_one({"_id": ObjectId(cart_id)})
         
@@ -374,7 +373,7 @@ def update_item(cart_id, sku):
         for item in items:
             if item["sku"] == sku:
                 item["quantity"] = quantity
-                item["updated_at"] = datetime.utcnow().isoformat()
+                item["updated_at"] = datetime.now(timezone.utc).isoformat()
                 item_found = True
                 break
         
@@ -385,7 +384,7 @@ def update_item(cart_id, sku):
         totals = calculate_cart_totals(items, cart.get("discount_code"), cart.get("shipping_method", "standard"))
         mongo.db.carts.update_one(
             {"_id": ObjectId(cart_id)},
-            {"$set": {"items": items, **totals, "updated_at": datetime.utcnow()}}
+            {"$set": {"items": items, **totals, "updated_at": datetime.now(timezone.utc)}}
         )
         
         updated_cart = mongo.db.carts.find_one({"_id": ObjectId(cart_id)})
@@ -412,7 +411,7 @@ def remove_item(cart_id, sku):
         # Pull item from array
         mongo.db.carts.update_one(
             {"_id": ObjectId(cart_id)},
-            {"$pull": {"items": {"sku": sku}}, "$set": {"updated_at": datetime.utcnow()}}
+            {"$pull": {"items": {"sku": sku}}, "$set": {"updated_at": datetime.now(timezone.utc)}}
         )
         
         # Recalculate totals
@@ -424,7 +423,7 @@ def remove_item(cart_id, sku):
         )
         mongo.db.carts.update_one(
             {"_id": ObjectId(cart_id)},
-            {"$set": {**totals, "updated_at": datetime.utcnow()}}
+            {"$set": {**totals, "updated_at": datetime.now(timezone.utc)}}
         )
         
         updated_cart = mongo.db.carts.find_one({"_id": ObjectId(cart_id)})
@@ -469,7 +468,7 @@ def apply_coupon(cart_id):
         totals = calculate_cart_totals(cart.get("items", []), code, cart.get("shipping_method", "standard"))
         mongo.db.carts.update_one(
             {"_id": ObjectId(cart_id)},
-            {"$set": {**totals, "discount_code": code, "updated_at": datetime.utcnow()}}
+            {"$set": {**totals, "discount_code": code, "updated_at": datetime.now(timezone.utc)}}
         )
         
         updated_cart = mongo.db.carts.find_one({"_id": ObjectId(cart_id)})
@@ -507,7 +506,7 @@ def update_shipping(cart_id):
         totals = calculate_cart_totals(cart.get("items", []), cart.get("discount_code"), method)
         mongo.db.carts.update_one(
             {"_id": ObjectId(cart_id)},
-            {"$set": {**totals, "shipping_method": method, "updated_at": datetime.utcnow()}}
+            {"$set": {**totals, "shipping_method": method, "updated_at": datetime.now(timezone.utc)}}
         )
         
         updated_cart = mongo.db.carts.find_one({"_id": ObjectId(cart_id)})
@@ -554,17 +553,20 @@ def checkout(cart_id):
             "billing_address": data.get("billing_address", {}),
             "payment_method": data.get("payment_method", "credit_card"),
             "status": "confirmed",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         
         # Mark cart as checked out
         mongo.db.carts.update_one(
             {"_id": ObjectId(cart_id)},
-            {"$set": {"status": "checked_out", "updated_at": datetime.utcnow()}}
+            {"$set": {"status": "checked_out", "updated_at": datetime.now(timezone.utc)}}
         )
         
         # Store order
-        mongo.db.orders.insert_one(order_summary)
+        result = mongo.db.orders.insert_one(order_summary)
+        order_summary["id"] = str(result.inserted_id)
+        if "_id" in order_summary:
+            del order_summary["_id"]
         
         return jsonify({
             "message": "Order placed successfully",

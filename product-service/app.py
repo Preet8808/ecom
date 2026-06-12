@@ -19,9 +19,10 @@ API Endpoints:
 from flask import Flask, jsonify, request
 from flask_pymongo import PyMongo
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import sys
+from prometheus_flask_exporter import PrometheusMetrics
 
 # ---------------------------------------------------------------------------
 # Application Factory & Configuration
@@ -39,7 +40,11 @@ def create_app(config_name="production"):
     app.mongo = mongo
     
     # Store start time for uptime reporting
-    app.start_time = datetime.utcnow()
+    app.start_time = datetime.now(timezone.utc)
+    
+    # Initialize Prometheus Metrics
+    metrics = PrometheusMetrics(app)
+    metrics.info('app_info', 'Product Catalog Service', version='1.0.0')
     
     # Ensure indexes exist
     with app.app_context():
@@ -91,8 +96,8 @@ def serialize_product(product):
         "reviews": product.get("reviews", []),
         "rating": product.get("rating", 0.0),
         "is_active": product.get("is_active", True),
-        "created_at": product.get("created_at", datetime.utcnow()).isoformat() if isinstance(product.get("created_at"), datetime) else product.get("created_at"),
-        "updated_at": product.get("updated_at", datetime.utcnow()).isoformat() if isinstance(product.get("updated_at"), datetime) else product.get("updated_at"),
+        "created_at": product.get("created_at", datetime.now(timezone.utc)).isoformat() if isinstance(product.get("created_at"), datetime) else product.get("created_at"),
+        "updated_at": product.get("updated_at", datetime.now(timezone.utc)).isoformat() if isinstance(product.get("updated_at"), datetime) else product.get("updated_at"),
     }
 
 
@@ -121,21 +126,21 @@ def health_check():
     try:
         # Verify MongoDB connectivity
         mongo.db.command("ping")
-        uptime = (datetime.utcnow() - app.start_time).total_seconds()
+        uptime = (datetime.now(timezone.utc) - app.start_time).total_seconds()
         return jsonify({
             "status": "healthy",
             "service": "product-service",
             "version": "1.0.0",
             "uptime_seconds": round(uptime, 2),
             "database": "connected",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }), 200
     except Exception as e:
         return jsonify({
             "status": "unhealthy",
             "service": "product-service",
             "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }), 503
 
 
@@ -212,7 +217,7 @@ def create_product():
         
         # Generate SKU if not provided
         if "sku" not in data:
-            data["sku"] = f"PRD-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            data["sku"] = f"PRD-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
         
         # Check for duplicate SKU
         existing = mongo.db.products.find_one({"sku": data["sku"]})
@@ -233,8 +238,8 @@ def create_product():
             "reviews": [],
             "rating": 0.0,
             "is_active": True,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
         }
         
         result = mongo.db.products.insert_one(product_doc)
@@ -282,7 +287,7 @@ def update_product(product_id):
             return jsonify({"error": error}), 400
         
         # Build update document (exclude immutable fields)
-        update_data = {"updated_at": datetime.utcnow()}
+        update_data = {"updated_at": datetime.now(timezone.utc)}
         allowed_fields = ["name", "description", "price", "category", "brand",
                          "stock_quantity", "images", "attributes", "is_active"]
         
@@ -317,7 +322,7 @@ def delete_product(product_id):
         
         result = mongo.db.products.update_one(
             {"_id": ObjectId(product_id)},
-            {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
+            {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}}
         )
         
         if result.matched_count == 0:
@@ -375,7 +380,7 @@ def add_review(product_id):
             "rating": rating,
             "comment": data.get("comment", ""),
             "reviewer": data.get("reviewer", "Anonymous"),
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         
         # Add review

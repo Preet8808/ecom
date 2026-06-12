@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import os
 import requests
 import logging
+from prometheus_flask_exporter import PrometheusMetrics
 
 # ---------------------------------------------------------------------------
 # Logging Setup
@@ -47,6 +48,10 @@ def create_app():
         "http://cart-service.ecomops.svc.cluster.local:5000"
     )
     app.start_time = datetime.now(timezone.utc)
+    
+    # Initialize Prometheus Metrics
+    metrics = PrometheusMetrics(app)
+    metrics.info('app_info', 'Frontend Service', version='1.0.0')
     
     return app
 
