@@ -1,0 +1,293 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: ecomops
+  labels:
+    app: grafana
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: ecomops-platform
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: ecomops-platform
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        fsGroup: 472
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: "admin"
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: "admin123"
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_SERVER_ROOT_URL
+              value: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "true"
+            - name: GF_PATHS_PROVISIONING
+              value: "/etc/grafana/provisioning"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: grafana-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: grafana-dashboards
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: grafana-dashboard-json
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+            - name: grafana-storage
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: grafana-datasources
+          configMap:
+            name: grafana-datasources
+        - name: grafana-dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: grafana-dashboard-json
+          configMap:
+            name: grafana-dashboard-json
+        - name: grafana-storage
+          emptyDir: {}
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: ecomops
+  labels:
+    app.kubernetes.io/name: grafana-datasources
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: ecomops-platform
+data:
+  datasource.yml: |
+    apiVersion: 1
+    deleteDatasources:
+      - name: Prometheus
+        orgId: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.ecomops.svc.cluster.local:9090
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: "15s"
+          httpMethod: POST
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: ecomops
+  labels:
+    app.kubernetes.io/name: grafana-dashboards
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: ecomops-platform
+data:
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: 'EcomOps'
+        folderUid: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-json
+  namespace: ecomops
+  labels:
+    app.kubernetes.io/name: grafana-dashboard-json
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: ecomops-platform
+data:
+  ecomops-dashboard.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "gnetId": null,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "id": 1,
+          "title": "Request Rate (req/sec)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "rate(flask_http_request_total[5m])",
+              "legendFormat": "{{ service }} - {{ method }} {{ status }}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 100},
+                  {"color": "red", "value": 500}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Response Time (p95)",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m]))",
+              "legendFormat": "{{ service }} - {{ method }}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "yAxes": [
+            {"format": "s", "label": "Seconds"},
+            {"format": "short"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Error Rate (%)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "(sum(rate(flask_http_request_total{status=~\"5..\"}[5m])) / sum(rate(flask_http_request_total[5m]))) * 100",
+              "legendFormat": "Error %",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 1},
+                  {"color": "red", "value": 5}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 4,
+          "title": "Container Health (Up/Down)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "up{job=~\"product-service|cart-service|frontend\"}",
+              "legendFormat": "{{ job }}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+                {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"}
+              ]
+            }
+          }
+        },
+        {
+          "id": 5,
+          "title": "Pod Restarts",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "kube_pod_container_status_restarts_total{namespace=\"ecomops\"}",
+              "legendFormat": "{{ pod }} - {{ container }}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+          "yAxes": [
+            {"format": "short", "label": "Restart Count"},
+            {"format": "short"}
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 27,
+      "style": "dark",
+      "tags": ["ecomops", "flask"],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "timezone": "browser",
+      "title": "EcomOps Platform Dashboard",
+      "uid": "ecomops-main",
+      "version": 1
+    }

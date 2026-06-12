@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecomops
+  labels:
+    name: ecomops
+    environment: dev
+    app.kubernetes.io/name: ecomops
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/part-of: ecomops-platform
