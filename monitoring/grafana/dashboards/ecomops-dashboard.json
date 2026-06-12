@@ -15,7 +15,7 @@
       "targets": [
         {
           "expr": "rate(flask_http_request_total[5m])",
-          "legendFormat": "{{ service }} - {{ method }} {{ status }}",
+          "legendFormat": "{{ job }} - {{ method }} {{ status }}",
           "refId": "A"
         }
       ],
@@ -36,19 +36,24 @@
     {
       "id": 2,
       "title": "Response Time (p95)",
-      "type": "graph",
+      "type": "timeseries",
       "targets": [
         {
           "expr": "histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m]))",
-          "legendFormat": "{{ service }} - {{ method }}",
+          "legendFormat": "{{ job }} - {{ method }}",
           "refId": "A"
         }
       ],
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-      "yAxes": [
-        {"format": "s", "label": "Seconds"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth"
+          },
+          "unit": "s"
+        }
+      }
     },
     {
       "id": 3,
@@ -56,7 +61,7 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "(sum(rate(flask_http_request_total{status=~\"5..\"}[5m])) / sum(rate(flask_http_request_total[5m]))) * 100",
+          "expr": "((sum(rate(flask_http_request_total{status=~\"5..\"}[5m])) or vector(0)) / sum(rate(flask_http_request_total[5m]))) * 100 or vector(0)",
           "legendFormat": "Error %",
           "refId": "A"
         }
@@ -99,7 +104,7 @@
     {
       "id": 5,
       "title": "Pod Restarts",
-      "type": "graph",
+      "type": "timeseries",
       "targets": [
         {
           "expr": "kube_pod_container_status_restarts_total{namespace=\"ecomops\"}",
@@ -108,10 +113,13 @@
         }
       ],
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
-      "yAxes": [
-        {"format": "short", "label": "Restart Count"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line"
+          }
+        }
+      }
     }
   ],
   "refresh": "10s",
