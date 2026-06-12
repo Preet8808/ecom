@@ -118,7 +118,7 @@
                 <button class="add-btn" onclick="addToCart(this)">Add to Cart</button>
             </div>
             {% if product.rating > 0 %}
-            <div class="product-rating">{"&#11088;"|safe * product.rating|int }} ({{ product.rating }})</div>
+            <div class="product-rating">{{ "&#11088;"|safe * product.rating|int }} ({{ product.rating }})</div>
             {% endif %}
         </div>
     </div>
@@ -134,53 +134,3 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-async function addToCart(btn) {
-    const card = btn.closest('.product-card');
-    const sku = card.dataset.sku;
-    const name = card.dataset.name;
-    const price = parseFloat(card.dataset.price);
-    
-    btn.textContent = 'Adding...';
-    btn.disabled = true;
-    
-    try {
-        // Create cart if needed
-        let cartId = getCartId();
-        if (!cartId) {
-            const resp = await fetch('/api/cart/create', { method: 'POST' });
-            const data = await resp.json();
-            cartId = data.cart?.id;
-            setCartId(cartId);
-        }
-        
-        // Add item
-        const resp = await fetch(`/api/cart/${cartId}/add`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sku, name, price, quantity: 1 })
-        });
-        
-        const data = await resp.json();
-        
-        if (resp.ok) {
-            btn.textContent = 'Added!';
-            btn.classList.add('added');
-            setTimeout(() => {
-                btn.textContent = 'Add to Cart';
-                btn.classList.remove('added');
-                btn.disabled = false;
-            }, 2000);
-            document.getElementById('cart-count').textContent = data.cart?.item_count || 0;
-        } else {
-            btn.textContent = 'Failed';
-            setTimeout(() => { btn.textContent = 'Add to Cart'; btn.disabled = false; }, 2000);
-        }
-    } catch (e) {
-        btn.textContent = 'Error';
-        setTimeout(() => { btn.textContent = 'Add to Cart'; btn.disabled = false; }, 2000);
-    }
-}
-</script>
-{% endblock %}

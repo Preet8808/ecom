@@ -14,7 +14,7 @@ Features:
 """
 
 from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import requests
 import logging
@@ -46,7 +46,7 @@ def create_app():
         "CART_SERVICE_URL",
         "http://cart-service.ecomops.svc.cluster.local:5000"
     )
-    app.start_time = datetime.utcnow()
+    app.start_time = datetime.now(timezone.utc)
     
     return app
 
@@ -107,13 +107,13 @@ def cart_api_get(path):
 @app.route("/health", methods=["GET"])
 def health_check():
     """Health check for Kubernetes probes."""
-    uptime = (datetime.utcnow() - app.start_time).total_seconds()
+    uptime = (datetime.now(timezone.utc) - app.start_time).total_seconds()
     return jsonify({
         "status": "healthy",
         "service": "frontend",
         "version": "1.0.0",
         "uptime_seconds": round(uptime, 2),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }), 200
 
 
@@ -219,8 +219,12 @@ def view_cart():
     cart_data = cart_api_get(f"/carts/{cart_id}")
     
     # Get coupons
-    coupons_resp = requests.get(f"{app.cart_service_url}/coupons", timeout=5)
-    coupons = coupons_resp.json().get("coupons", []) if coupons_resp.status_code == 200 else []
+    try:
+        coupons_resp = requests.get(f"{app.cart_service_url}/coupons", timeout=5)
+        coupons = coupons_resp.json().get("coupons", []) if coupons_resp.status_code == 200 else []
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch coupons: {e}")
+        coupons = []
     
     return render_template(
         "cart.html",
@@ -311,6 +315,13 @@ def api_checkout(cart_id):
     """AJAX: Process checkout."""
     data, status = cart_api_post(f"/carts/{cart_id}/checkout", request.json)
     return jsonify(data), status
+
+
+@app.route("/api/cart/<cart_id>/data")
+def api_get_cart_data(cart_id):
+    """AJAX: Get cart data (item count, items, etc.)"""
+    data = cart_api_get(f"/carts/{cart_id}")
+    return jsonify(data)
 
 
 @app.route("/checkout/success")

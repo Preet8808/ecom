@@ -154,6 +154,13 @@
         function updateCartCount() {
             const cartId = getCartId();
             if (!cartId) return;
+            
+            // Update the cart link to include cart_id
+            const cartLinks = document.querySelectorAll('.cart-icon');
+            cartLinks.forEach(link => {
+                link.href = `/cart?cart_id=${cartId}`;
+            });
+
             fetch(`/api/cart/${cartId}/data`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
@@ -164,6 +171,58 @@
                 .catch(() => {});
         }
         
+        async function addToCart(btn) {
+            const card = btn.closest('.product-card');
+            const sku = card.dataset.sku;
+            const name = card.dataset.name;
+            const price = parseFloat(card.dataset.price);
+            
+            btn.textContent = 'Adding...';
+            btn.disabled = true;
+            
+            try {
+                // Create cart if needed
+                let cartId = getCartId();
+                if (!cartId) {
+                    const resp = await fetch('/api/cart/create', { method: 'POST' });
+                    const data = await resp.json();
+                    cartId = data.cart?.id;
+                    setCartId(cartId);
+                    // Update the cart link
+                    const cartLinks = document.querySelectorAll('.cart-icon');
+                    cartLinks.forEach(link => {
+                        link.href = `/cart?cart_id=${cartId}`;
+                    });
+                }
+                
+                // Add item
+                const resp = await fetch(`/api/cart/${cartId}/add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sku, name, price, quantity: 1 })
+                });
+                
+                const data = await resp.json();
+                
+                if (resp.ok) {
+                    btn.textContent = 'Added!';
+                    btn.classList.add('added');
+                    setTimeout(() => {
+                        btn.textContent = 'Add to Cart';
+                        btn.classList.remove('added');
+                        btn.disabled = false;
+                    }, 2000);
+                    document.getElementById('cart-count').textContent = data.cart?.item_count || 0;
+                } else {
+                    btn.textContent = 'Failed';
+                    setTimeout(() => { btn.textContent = 'Add to Cart'; btn.disabled = false; }, 2000);
+                }
+            } catch (e) {
+                btn.textContent = 'Error';
+                setTimeout(() => { btn.textContent = 'Add to Cart'; btn.disabled = false; }, 2000);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', updateCartCount);
     </script>
     {% block extra_js %}{% endblock %}
